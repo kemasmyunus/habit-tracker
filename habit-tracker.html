@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Habit Tracker</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1f2a37;--mu:#6b7280;--bd:#e5e2d9;--ac:#2563eb}
+@media(prefers-color-scheme:dark){:root{--bg:#14161a;--card:#1d2026;--tx:#eceff4;--mu:#9aa3b2;--bd:#2c3038}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:16px 16px 40px}
+nav{display:flex;gap:8px;margin-bottom:16px}
+nav button,.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 16px;border-radius:999px;cursor:pointer;font:inherit}
+nav button.on,.btn.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 4px;font-size:18px}h3{margin:0 0 10px;font-size:15px}.mu{color:var(--mu);font-size:13px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+select,input{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px 10px}
+svg{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px}
+.lg{display:flex;align-items:center;gap:6px;font-size:14px}.sw{width:14px;height:14px;border-radius:4px;flex:none}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--bd)}
+.row:first-of-type{border-top:0}.grow{flex:1;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.time{font-variant-numeric:tabular-nums;font-weight:600;min-width:98px;font-size:14px}
+.chk{width:22px;height:22px;accent-color:var(--ac);cursor:pointer}
+.item{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px;cursor:pointer;background:var(--card)}
+.item:hover{border-color:var(--ac)}.item.sel{border-color:var(--ac);box-shadow:0 0 0 2px #2563eb33}
+.form{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)}
+.fr{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.fr input[type=text]{flex:1;min-width:140px}
+.x{background:none;border:0;color:#dc2626;cursor:pointer;font-size:18px;padding:4px 8px}
+input[type=color]{padding:2px;width:40px;height:34px}
+.empty{color:var(--mu);padding:12px 0;text-align:center}
+.hide{display:none}
+</style></head><body><div class="wrap">
+<nav><button id="n1" class="on">Dashboard</button><button id="n2">Kelola Habit</button></nav>
+
+<section id="p1">
+ <div class="card">
+  <div class="top"><div><h2>Progres Habit</h2><div class="mu">Naik bertahap sesuai sub habit yang dikerjakan</div></div>
+  <select id="rng"><option value="7">7 hari</option><option value="14">14 hari</option><option value="30">30 hari</option></select></div>
+  <div id="chart"></div><div class="legend" id="legend"></div>
+ </div>
+ <div class="card"><h2>Jadwal Terdekat</h2><div class="mu" id="today"></div><div id="sched"></div></div>
+</section>
+
+<section id="p2" class="hide">
+ <div class="card"><h2>Daftar Habit</h2><div class="mu" style="margin-bottom:12px">Klik habit untuk mengatur sub habit</div>
+  <div id="list"></div>
+  <div class="fr" style="margin-top:8px"><input type="text" id="hn" placeholder="Nama habit baru, mis. Olahraga"><input type="color" id="hc" value="#2563eb"><button class="btn pri" id="ha">Tambah</button></div>
+ </div>
+ <div class="card hide" id="det"></div>
+</section>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const COL=["#2563eb","#16a34a","#ea580c","#9333ea","#dc2626","#0891b2","#ca8a04","#db2777"];
+let S={habits:[],logs:{}},sel=null;
+function load(){try{const r=localStorage.getItem("habit-tracker-v1");if(r)S=JSON.parse(r)}catch(e){}
+ if(!S.habits.length&&!localStorage.getItem("habit-seeded")){
+  S.habits=[{id:"h1",name:"Olahraga",color:"#2563eb",subs:[{id:"s1",name:"Lari pagi",start:"06:00",end:"06:30"},{id:"s2",name:"Push-up",start:"18:00",end:"18:15"}]},
+  {id:"h2",name:"Sholat",color:"#16a34a",subs:[{id:"s3",name:"Subuh",start:"04:30",end:"05:00"},{id:"s4",name:"Zuhur",start:"12:00",end:"12:30"},{id:"s5",name:"Ashar",start:"15:15",end:"15:45"}]}];
+  try{localStorage.setItem("habit-seeded","1")}catch(e){}}}
+function save(){try{localStorage.setItem("habit-tracker-v1",JSON.stringify(S))}catch(e){}}
+const uid=()=>Math.random().toString(36).slice(2,9);
+const key=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const m=t=>{const[a,b]=t.split(":");return +a*60+ +b};
+const hm=n=>{n=((n%1440)+1440)%1440;return String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0")};
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const done=(k,id)=>!!(S.logs[k]&&S.logs[k][id]);
+function toggle(k,id){S.logs[k]=S.logs[k]||{};S.logs[k][id]=!S.logs[k][id];save();render()}
+function pct(h,k){if(!h.subs.length)return 0;return h.subs.filter(s=>done(k,s.id)).length/h.subs.length}
+
+function chart(){
+ const n=+$("#rng").value,W=700,H=300,L=44,R=16,T=16,B=36,days=[];
+ for(let i=n-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d)}
+ const X=i=>L+(n>1?i*(W-L-R)/(n-1):0),Y=v=>T+(1-v)*(H-T-B);
+ let g="";
+ for(let i=0;i<=4;i++){const v=i/4;g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" opacity=".12"/><text x="${L-8}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="currentColor" opacity=".6">${v*100}%</text>`}
+ const st=Math.ceil(n/7);
+ days.forEach((d,i)=>{if(i%st===0||i===n-1)g+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">${d.getDate()}/${d.getMonth()+1}</text>`});
+ S.habits.forEach(h=>{
+  const pts=days.map((d,i)=>[X(i),Y(pct(h,key(d)))]);
+  g+=`<polyline fill="none" stroke="${h.color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>p.join(",")).join(" ")}"/>`;
+  pts.forEach((p,i)=>{const k=key(days[i]);g+=`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="${h.color}"><title>${esc(h.name)} • ${k} • ${h.subs.filter(s=>done(k,s.id)).length}/${h.subs.length}</title></circle>`});
+ });
+ $("#chart").innerHTML=S.habits.length?`<svg viewBox="0 0 ${W} ${H}" style="color:var(--tx)">${g}</svg>`:`<div class="empty">Belum ada habit. Tambahkan di menu Kelola Habit.</div>`;
+ $("#legend").innerHTML=S.habits.map(h=>`<div class="lg"><span class="sw" style="background:${h.color}"></span>${esc(h.name)}</div>`).join("");
+}
+
+function sched(){
+ const now=new Date(),k=key(now),nm=now.getHours()*60+now.getMinutes();
+ $("#today").textContent=now.toLocaleDateString("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+ const all=[];S.habits.forEach(h=>h.subs.forEach(s=>all.push({h,s})));
+ all.sort((a,b)=>m(a.s.start)-m(b.s.start));
+ let up=all.filter(x=>!done(k,x.s.id)&&(m(x.s.end)>=nm||m(x.s.end)<m(x.s.start)));
+ let html="";
+ if(!up.length&&all.length){html=`<div class="empty">🎉 Semua jadwal hari ini selesai atau sudah lewat.</div>`}
+ else if(!all.length){html=`<div class="empty">Belum ada sub habit terjadwal.</div>`}
+ else html=up.slice(0,6).map(x=>{const on=m(x.s.start)<=nm&&nm<=m(x.s.end);
+  return `<div class="row"><span class="dot" style="background:${x.h.color}"></span><div class="time">${x.s.start}–${x.s.end}</div><div class="grow"><b>${esc(x.s.name)}</b> <span class="mu">${esc(x.h.name)}${on?" • sedang berlangsung":""}</span></div><input type="checkbox" class="chk" onchange="toggle('${k}','${x.s.id}')"></div>`}).join("");
+ $("#sched").innerHTML=html;
+}
+
+function list(){
+ $("#list").innerHTML=S.habits.length?S.habits.map(h=>`<div class="item ${h.id===sel?"sel":""}" onclick="pick('${h.id}')"><span class="sw" style="background:${h.color}"></span><div class="grow"><b>${esc(h.name)}</b></div><span class="mu">${h.subs.length} sub</span></div>`).join(""):`<div class="empty">Belum ada habit.</div>`;
+ const h=S.habits.find(x=>x.id===sel),d=$("#det");
+ if(!h){d.classList.add("hide");return}
+ d.classList.remove("hide");
+ d.innerHTML=`<div class="top"><h2>${esc(h.name)}</h2><div class="fr"><input type="color" value="${h.color}" onchange="setCol('${h.id}',this.value)"><button class="btn" onclick="ren('${h.id}')">Ubah nama</button><button class="x" title="Hapus habit" onclick="delH('${h.id}')">🗑</button></div></div>
+ <div class="mu" style="margin-bottom:8px">Grafik habit ini dibagi ${h.subs.length||1} tingkat</div>
+ ${h.subs.length?h.subs.map(s=>`<div class="row"><div class="time">${s.start}–${s.end}</div><div class="grow">${esc(s.name)}</div><button class="x" onclick="delS('${h.id}','${s.id}')">✕</button></div>`).join(""):`<div class="empty">Belum ada sub habit.</div>`}
+ <div class="form"><h3>Tambah sub habit</h3>
+  <input type="text" id="sn" placeholder="Nama, mis. Subuh">
+  <div class="fr"><label>Mulai <input type="time" id="ss" value="06:00"></label>
+   <select id="sm" onchange="mode()"><option value="end">Jam selesai</option><option value="dur">Durasi (menit)</option></select>
+   <input type="time" id="se" value="06:30"><input type="number" id="sd" min="1" value="30" class="hide" style="width:90px"></div>
+  <button class="btn pri" onclick="addS('${h.id}')">Tambah sub habit</button></div>`;
+}
+function mode(){const d=$("#sm").value==="dur";$("#se").classList.toggle("hide",d);$("#sd").classList.toggle("hide",!d)}
+function pick(id){sel=sel===id?null:id;list()}
+function addS(id){const h=S.habits.find(x=>x.id===id),n=$("#sn").value.trim(),s=$("#ss").value;
+ if(!n||!s){alert("Isi nama dan jam mulai");return}
+ let e;if($("#sm").value==="dur"){const d=+$("#sd").value;if(!d||d<1){alert("Durasi tidak valid");return}e=hm(m(s)+d)}else{e=$("#se").value;if(!e){alert("Isi jam selesai");return}}
+ h.subs.push({id:uid(),name:n,start:s,end:e});save();render()}
+function delS(h,s){const x=S.habits.find(a=>a.id===h);x.subs=x.subs.filter(a=>a.id!==s);save();render()}
+function delH(id){if(confirm("Hapus habit ini beserta sub habitnya?")){S.habits=S.habits.filter(a=>a.id!==id);sel=null;save();render()}}
+function ren(id){const h=S.habits.find(a=>a.id===id),n=prompt("Nama baru:",h.name);if(n&&n.trim()){h.name=n.trim();save();render()}}
+function setCol(id,c){S.habits.find(a=>a.id===id).color=c;save();render()}
+$("#ha").onclick=()=>{const n=$("#hn").value.trim();if(!n)return;
+ const id=uid();S.habits.push({id,name:n,color:$("#hc").value,subs:[]});sel=id;$("#hn").value="";$("#hc").value=COL[S.habits.length%COL.length];save();render()};
+$("#hn").onkeydown=e=>{if(e.key==="Enter")$("#ha").click()};
+$("#rng").onchange=chart;
+function tab(n){$("#p1").classList.toggle("hide",n!==1);$("#p2").classList.toggle("hide",n!==2);$("#n1").classList.toggle("on",n===1);$("#n2").classList.toggle("on",n===2);render()}
+$("#n1").onclick=()=>tab(1);$("#n2").onclick=()=>tab(2);
+function render(){chart();sched();list()}
+load();render();setInterval(sched,60000);
+</script></body></html>
